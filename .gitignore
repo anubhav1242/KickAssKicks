@@ -1,0 +1,22 @@
+# Node.js dependencies
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+
+# AWS deployment artifacts
+function.zip
+
+# macOS specific
+.DS_Store
+
+# IDEs and editors
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
