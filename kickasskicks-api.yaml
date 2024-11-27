@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: 'AWS::Serverless-2016-10-31'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: dev for KickAssKicks
+  QueryLimit:
+    Type: Number
+    Default: 20
+    Description: Maximum sneakers to return in a query
+  ProductsTableName:
+    Type: String
+    Default: KickAssKicks-Products
+    Description: DynamoDB table name for sneaker products
+  UserPoolId:
+    Type: String
+    Description: Cognito User Pool ID for user authentication
+  DeliveryTableName:
+    Type: String
+    Default: KickAssKicks-Delivery
+    Description: DynamoDB table name for delivery service
+
+Resources:
+  #######################
+  # AppSync GraphQL API #
+  #######################
+  Api:
+    Type: AWS::AppSync::GraphQLApi
+    Properties:
+      Name: !Sub "kickasskicks-${dev}-api"
+      AuthenticationType: AMAZON_COGNITO_USER_POOLS
+      AdditionalAuthenticationProviders:
+        - AuthenticationType: API_KEY
+      LogConfig:
+        CloudWatchLogsRoleArn: !GetAtt ApiLoggingRole.Arn
+        FieldLogLevel: ALL
+      XrayEnabled: true
+
+  ##########################
+  # Cognito Authentication #
+  ##########################
+  ApiLoggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogsAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  ##########################
+  # DynamoDB Products Table #
+  ##########################
+  ProductsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref ProductsTableName
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: category
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: category-index
+          KeySchema:
+            - AttributeName: category
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+
+  ######################
+  # AppSync Schema #
+  ######################
+  Schema:
+    Type: AWS::AppSync::GraphQLSchema
+    Properties:
+      ApiId: !GetAtt Api.ApiId
+      DefinitionS3Location: "kicks-schemas/api.graphql"
+
+  ####################
+  # AppSync Resolver #
+  ####################
+  ProductsDataSource:
+    Type: AWS::AppSync::DataSource
+    Properties:
+      ApiId: !GetAtt Api.ApiId
+      Name: ProductsTable
+      Type: AMAZON_DYNAMODB
+      ServiceRoleArn: !GetAtt ProductsRole.Arn
+      DynamoDBConfig:
+        AwsRegion: !Ref AWS::Region
+        TableName: !Ref ProductsTableName
+
+  GetSneakersResolver:
+    Type: AWS::AppSync::Resolver
+    Properties:
+      ApiId: !GetAtt Api.ApiId
+      TypeName: Query
+      FieldName: getSneakers
+      DataSourceName: !GetAtt ProductsDataSource.Name
+      RequestMappingTemplate: |
+        {
+          "version": "2017-02-28",
+          "operation": "Scan",
+          "limit": $util.toJson($context.arguments.limit)
+        }
+      ResponseMappingTemplate: |
+        $utils.toJson($ctx.result.items)
+
+  ###########################
+  # IAM Role for AppSync Access #
+  ###########################
+  ProductsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: appsync.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ProductsTableAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ProductsTableName}"

@@ -1,0 +1,45 @@
+type Sneaker {
+  id: ID!
+  name: String!
+  brand: String!
+  price: Float!
+  size: [Float!]!
+  imageUrl: String
+  stock: Int!
+  category: String
+}
+
+type User {
+  id: ID!
+  username: String!
+  email: String!
+}
+
+type Order {
+  id: ID!
+  userId: ID!
+  items: [SneakerOrder!]!
+  total: Float!
+  status: String
+}
+
+type SneakerOrder {
+  sneakerId: ID!
+  quantity: Int!
+}
+
+type Query {
+  getSneakers: [Sneaker]
+  getSneaker(id: ID!): Sneaker
+  getOrders(userId: ID!): [Order]
+}
+
+type Mutation {
+  createOrder(userId: ID!, items: [SneakerOrderInput!]!): Order
+  addSneaker(name: String!, brand: String!, price: Float!, size: [Float!]!, imageUrl: String, stock: Int!, category: String): Sneaker
+}
+
+input SneakerOrderInput {
+  sneakerId: ID!
+  quantity: Int!
+}
