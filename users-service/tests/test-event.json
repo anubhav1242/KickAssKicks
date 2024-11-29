@@ -1,0 +1,10 @@
+{
+    "info": {
+      "fieldName": "createUser"
+    },
+    "arguments": {
+      "username": "johndoe",
+      "email": "johndoe@example.com",
+      "password": "Temp@1234"
+    }
+  }
